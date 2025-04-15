@@ -373,9 +373,9 @@ def display_news_analysis(asset_category, asset_symbol, news_articles, start_dat
             "Source": a.get("source", "Unknown"),
             "Title": a.get("title", "No title"),
             "Sentiment": next((ts.get("ticker_sentiment_label", "N/A") for ts in a.get("ticker_sentiment", []) 
-                             if ts.get("ticker") == get_alpha_symbol(asset_category, asset_symbol)),
+                      if ts.get("ticker") == get_alpha_symbol(asset_category, asset_symbol)), "N/A"),
             "Sentiment Score": next((float(ts.get("ticker_sentiment_score", 0)) for ts in a.get("ticker_sentiment", []) 
-                                   if ts.get("ticker") == get_alpha_symbol(asset_category, asset_symbol)),
+                           if ts.get("ticker") == get_alpha_symbol(asset_category, asset_symbol)), 0),
             "URL": a.get("url", "#")
         } for a in news_articles]
         
