@@ -736,7 +736,6 @@ def display_news_analysis(ticker, news_articles):
         if st.button("Regenerate Summary"):
             with st.spinner("Regenerating summary..."):
                 summary = summarize_daily_news(ticker, news_articles, selected_date)
-                st.session_state.daily_summaries[summary = summarize_daily_news(ticker, news_articles, selected_date)
                 st.session_state.daily_summaries[ticker][selected_date] = summary
     
     with tab2:
