@@ -79,9 +79,9 @@ def fetch_guardian_articles(ticker, days_back=7):
     
     # Prepare search terms based on ticker
     if ticker == "bitcoin":
-        search_terms = "bitcoin OR btc OR cryptocurrency"
+        search_terms = "bitcoin OR btc OR bit"
     elif ticker == "ethereum":
-        search_terms = "ethereum OR eth OR cryptocurrency"
+        search_terms = "ethereum OR eth"
     elif ticker == "gold":
         search_terms = "gold price OR gold market"
     elif ticker == "silver":
@@ -174,7 +174,7 @@ def create_rag_system(ticker, articles):
     return vectorstore
 
 # Function to call OpenRouter API for LLM tasks
-def openrouter_llm_call(prompt, model="mistralai/mistral-7b-instruct", max_tokens=1000):
+def openrouter_llm_call(prompt, model="deepseek/deepseek-v3-base:free", max_tokens=1000):
     """Call the OpenRouter API for LLM tasks"""
     try:
         completion = openrouter_client.chat.completions.create(
@@ -244,7 +244,7 @@ def summarize_daily_news(ticker, articles, date_str):
     # Call OpenRouter API for the summary
     summary = openrouter_llm_call(
         formatted_prompt, 
-        model="mistralai/mistral-7b-instruct",
+        model="deepseek/deepseek-v3-base:free",
         max_tokens=1000
     )
     
@@ -298,7 +298,7 @@ def ask_rag(question, vectorstore, ticker):
     # Call OpenRouter API for the answer
     answer = openrouter_llm_call(
         formatted_prompt, 
-        model="meta-llama/llama-3-70b-instruct",
+        model="deepseek/deepseek-v3-base:free",
         max_tokens=1000
     )
     
