@@ -16,9 +16,8 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
-# from langchain_community.llms import OpenRouter
 from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
+from openai import OpenAI
 import tempfile
 import plotly.graph_objs as go
 import plotly.express as px
@@ -26,6 +25,12 @@ import plotly.express as px
 # Configuration and API Keys
 GUARDIAN_API_KEY = st.secrets["GUARDIAN_API_KEY"]  # Set this in Streamlit secrets
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Set this in Streamlit secrets
+
+# OpenRouter client setup
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY,
+)
 
 # Page configuration
 st.set_page_config(
@@ -168,6 +173,29 @@ def create_rag_system(ticker, articles):
     
     return vectorstore
 
+# Function to call OpenRouter API for LLM tasks
+def openrouter_llm_call(prompt, model="mistralai/mistral-7b-instruct", max_tokens=1000):
+    """Call the OpenRouter API for LLM tasks"""
+    try:
+        completion = openrouter_client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "https://financial-insights-hub.streamlit.app",  # Replace with your site
+                "X-Title": "Financial Insights Hub",  # Replace with your site name
+            },
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=max_tokens
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error with OpenRouter API: {e}")
+        return f"Error generating response: {str(e)}"
+
 # Function to summarize articles
 def summarize_daily_news(ticker, articles, date_str):
     """Generate a summary for the ticker for a specific date using OpenRouter"""
@@ -192,13 +220,6 @@ def summarize_daily_news(ticker, articles, date_str):
         # Take first 1000 characters of body to stay within token limits
         content += f"TITLE: {title}\n\nCONTENT: {body[:1000]}\n\n---\n\n"
     
-    # Create the LLM for summarization (using a lighter model)
-    llm = OpenRouter(
-        api_key=OPENROUTER_API_KEY,
-        model="mistralai/mistral-7b-instruct",  # Using a smaller model for summarization
-        max_tokens=1000
-    )
-    
     # Create prompt template for summarization
     template = """
     You are a financial analyst specializing in market analysis. Below are news articles about {ticker} from {date}.
@@ -213,25 +234,21 @@ def summarize_daily_news(ticker, articles, date_str):
     Keep your analysis focused on factual information from the articles.
     """
     
-    prompt = PromptTemplate(
-        input_variables=["ticker", "date", "content"],
-        template=template
-    )
-    
     # Format the prompt
-    formatted_prompt = prompt.format(
+    formatted_prompt = template.format(
         ticker=TICKERS[ticker]["name"],
         date=date_str,
         content=content
     )
     
-    try:
-        # Generate summary
-        summary = llm.invoke(formatted_prompt)
-        return summary
-    except Exception as e:
-        st.error(f"Error generating summary: {e}")
-        return "Error generating summary. Please try again later."
+    # Call OpenRouter API for the summary
+    summary = openrouter_llm_call(
+        formatted_prompt, 
+        model="mistralai/mistral-7b-instruct",
+        max_tokens=1000
+    )
+    
+    return summary
 
 # Function to fetch financial data
 def get_financial_data(ticker_symbol, period="1mo"):
@@ -249,12 +266,12 @@ def ask_rag(question, vectorstore, ticker):
     if not vectorstore:
         return "No data available for this ticker. Please try another ticker or refresh the data."
     
-    # Create the LLM (using a more powerful model for Q&A)
-    llm = OpenRouter(
-        api_key=OPENROUTER_API_KEY,
-        model="meta-llama/llama-3-70b-instruct",  # More powerful model for RAG Q&A
-        max_tokens=1000
-    )
+    # Get relevant documents from the RAG system
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    docs = retriever.get_relevant_documents(question)
+    
+    # Extract context from documents
+    context = "\n\n".join([doc.page_content for doc in docs])
     
     # Create prompt template for Q&A
     template = """
@@ -271,27 +288,21 @@ def ask_rag(question, vectorstore, ticker):
     ANSWER:
     """
     
-    qa_prompt = PromptTemplate(
-        input_variables=["context", "question", "ticker"],
-        template=template
+    # Format the prompt
+    formatted_prompt = template.format(
+        ticker=TICKERS[ticker]["name"],
+        context=context,
+        question=question
     )
     
-    # Create QA chain
-    qa = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vectorstore.as_retriever(),
-        chain_type_kwargs={"prompt": qa_prompt},
-        return_source_documents=True
+    # Call OpenRouter API for the answer
+    answer = openrouter_llm_call(
+        formatted_prompt, 
+        model="meta-llama/llama-3-70b-instruct",
+        max_tokens=1000
     )
     
-    # Invoke the chain
-    try:
-        result = qa({"query": question, "ticker": TICKERS[ticker]["name"]})
-        return result["result"]
-    except Exception as e:
-        st.error(f"Error querying the RAG system: {e}")
-        return "Error processing your question. Please try again later."
+    return answer
 
 # Function to calculate sentiment score
 def calculate_sentiment_score(summary):
