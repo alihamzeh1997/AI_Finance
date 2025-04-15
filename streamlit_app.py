@@ -174,7 +174,7 @@ def create_rag_system(ticker, articles):
     return vectorstore
 
 # Function to call OpenRouter API for LLM tasks
-def openrouter_llm_call(prompt, model="deepseek/deepseek-v3-base:free", max_tokens=1000):
+def openrouter_llm_call(prompt, model="nvidia/llama-3.1-nemotron-70b-instruct:free", max_tokens=1000):
     """Call the OpenRouter API for LLM tasks"""
     try:
         completion = openrouter_client.chat.completions.create(
@@ -244,7 +244,7 @@ def summarize_daily_news(ticker, articles, date_str):
     # Call OpenRouter API for the summary
     summary = openrouter_llm_call(
         formatted_prompt, 
-        model="deepseek/deepseek-v3-base:free",
+        model="nvidia/llama-3.1-nemotron-70b-instruct:free",
         max_tokens=1000
     )
     
@@ -298,7 +298,7 @@ def ask_rag(question, vectorstore, ticker):
     # Call OpenRouter API for the answer
     answer = openrouter_llm_call(
         formatted_prompt, 
-        model="deepseek/deepseek-v3-base:free",
+        model="nvidia/llama-3.1-nemotron-70b-instruct:free",
         max_tokens=1000
     )
     
