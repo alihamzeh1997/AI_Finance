@@ -1,10 +1,9 @@
-# app.py - Financial Insights Hub
+# app.py - Financial Insights Hub (Stocks Only)
 import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
 import datetime
-import os
 import time
 from datetime import datetime, timedelta
 import plotly.graph_objs as go
@@ -28,7 +27,7 @@ openrouter_client = OpenAI(
 
 # Page configuration
 st.set_page_config(
-    page_title="Financial Insights Hub",
+    page_title="Financial Insights Hub - Stocks",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -51,53 +50,18 @@ def init_session_state():
 
 init_session_state()
 
-# Define ticker mapping by category
+# Define stock tickers
 TICKERS = {
-    "crypto": {
-        "BTC": {"name": "Bitcoin", "alpha_symbol": "CRYPTO:BTC"},
-        "ETH": {"name": "Ethereum", "alpha_symbol": "CRYPTO:ETH"},
-        "BNB": {"name": "Binance Coin", "alpha_symbol": "CRYPTO:BNB"},
-        "SOL": {"name": "Solana", "alpha_symbol": "CRYPTO:SOL"},
-        "ADA": {"name": "Cardano", "alpha_symbol": "CRYPTO:ADA"},
-        "DOT": {"name": "Polkadot", "alpha_symbol": "CRYPTO:DOT"},
-        "XRP": {"name": "Ripple", "alpha_symbol": "CRYPTO:XRP"},
-        "DOGE": {"name": "Dogecoin", "alpha_symbol": "CRYPTO:DOGE"},
-        "AVAX": {"name": "Avalanche", "alpha_symbol": "CRYPTO:AVAX"},
-        "LINK": {"name": "Chainlink", "alpha_symbol": "CRYPTO:LINK"}
-    },
-    "stock": {
-        "AAPL": {"name": "Apple Inc.", "alpha_symbol": "AAPL"},
-        "MSFT": {"name": "Microsoft", "alpha_symbol": "MSFT"},
-        "GOOGL": {"name": "Alphabet", "alpha_symbol": "GOOGL"},
-        "AMZN": {"name": "Amazon", "alpha_symbol": "AMZN"},
-        "META": {"name": "Meta Platforms", "alpha_symbol": "META"},
-        "TSLA": {"name": "Tesla", "alpha_symbol": "TSLA"},
-        "NVDA": {"name": "NVIDIA", "alpha_symbol": "NVDA"},
-        "JPM": {"name": "JPMorgan Chase", "alpha_symbol": "JPM"},
-        "V": {"name": "Visa", "alpha_symbol": "V"},
-        "WMT": {"name": "Walmart", "alpha_symbol": "WMT"}
-    },
-    "index": {
-        "SPX": {"name": "S&P 500", "alpha_symbol": "INDEX:SPX"},
-        "DJI": {"name": "Dow Jones", "alpha_symbol": "INDEX:DJI"},
-        "COMP": {"name": "NASDAQ", "alpha_symbol": "INDEX:COMP"},
-        "RUT": {"name": "Russell 2000", "alpha_symbol": "INDEX:RUT"},
-        "VIX": {"name": "Volatility Index", "alpha_symbol": "INDEX:VIX"}
-    },
-    "forex": {
-        "EUR/USD": {"name": "Euro/US Dollar", "alpha_symbol": "FOREX:EUR/USD"},
-        "USD/JPY": {"name": "US Dollar/Japanese Yen", "alpha_symbol": "FOREX:USD/JPY"},
-        "GBP/USD": {"name": "British Pound/US Dollar", "alpha_symbol": "FOREX:GBP/USD"},
-        "USD/CHF": {"name": "US Dollar/Swiss Franc", "alpha_symbol": "FOREX:USD/CHF"},
-        "AUD/USD": {"name": "Australian Dollar/US Dollar", "alpha_symbol": "FOREX:AUD/USD"}
-    },
-    "commodity": {
-        "GOLD": {"name": "Gold", "alpha_symbol": "COMMODITY:GOLD"},
-        "SILVER": {"name": "Silver", "alpha_symbol": "COMMODITY:SILVER"},
-        "OIL": {"name": "Crude Oil", "alpha_symbol": "COMMODITY:OIL"},
-        "NATGAS": {"name": "Natural Gas", "alpha_symbol": "COMMODITY:NATGAS"},
-        "COPPER": {"name": "Copper", "alpha_symbol": "COMMODITY:COPPER"}
-    }
+    "AAPL": {"name": "Apple Inc.", "alpha_symbol": "AAPL"},
+    "MSFT": {"name": "Microsoft", "alpha_symbol": "MSFT"},
+    "GOOGL": {"name": "Alphabet", "alpha_symbol": "GOOGL"},
+    "AMZN": {"name": "Amazon", "alpha_symbol": "AMZN"},
+    "META": {"name": "Meta Platforms", "alpha_symbol": "META"},
+    "TSLA": {"name": "Tesla", "alpha_symbol": "TSLA"},
+    "NVDA": {"name": "NVIDIA", "alpha_symbol": "NVDA"},
+    "JPM": {"name": "JPMorgan Chase", "alpha_symbol": "JPM"},
+    "V": {"name": "Visa", "alpha_symbol": "V"},
+    "WMT": {"name": "Walmart", "alpha_symbol": "WMT"}
 }
 
 # Alpha Vantage API Utilities
@@ -105,34 +69,20 @@ class AlphaVantageAPI:
     BASE_URL = "https://www.alphavantage.co/query"
     
     @staticmethod
-    def fetch_news(asset_category, asset_symbol, start_date=None, end_date=None, limit=50):
-        alpha_symbol = TICKERS[asset_category][asset_symbol]["alpha_symbol"].split(":")[-1]
-        
-        # Determine topics based on asset category
-        topic_map = {
-            "crypto": "blockchain,cryptocurrency",
-            "commodity": "economy_fiscal,economy_monetary",
-            "stock": "earnings,ipo,mergers_and_acquisitions,financial_markets",
-            "index": "earnings,ipo,mergers_and_acquisitions,financial_markets",
-            "forex": "forex,economy_fiscal,economy_monetary"
-        }
-        topics = topic_map.get(asset_category, "financial_markets")
-        
-        # Set time range
-        time_from = (datetime.now() - timedelta(days=7)).strftime("%Y%m%dT0000") if start_date is None else start_date.strftime("%Y%m%dT0000")
-        time_to = end_date.strftime("%Y%m%dT2359") if end_date else None
+    def fetch_news(asset_symbol, start_date=None, end_date=None, limit=50):
+        alpha_symbol = TICKERS[asset_symbol]["alpha_symbol"]
         
         params = {
             "function": "NEWS_SENTIMENT",
-            "topics": topics,
+            "topics": "earnings,ipo,mergers_and_acquisitions,financial_markets",
             "tickers": alpha_symbol,
-            "time_from": time_from,
+            "time_from": (datetime.now() - timedelta(days=7)).strftime("%Y%m%dT0000") if start_date is None else start_date.strftime("%Y%m%dT0000"),
             "limit": limit,
             "apikey": ALPHA_VANTAGE_API_KEY
         }
         
-        if time_to:
-            params["time_to"] = time_to
+        if end_date:
+            params["time_to"] = end_date.strftime("%Y%m%dT2359")
         
         try:
             response = requests.get(AlphaVantageAPI.BASE_URL, params=params, timeout=30)
@@ -145,31 +95,14 @@ class AlphaVantageAPI:
             return []
 
     @staticmethod
-    def fetch_market_data(asset_category, asset_symbol, outputsize="compact"):
-        alpha_symbol = TICKERS[asset_category][asset_symbol]["alpha_symbol"].split(":")[-1]
+    def fetch_market_data(asset_symbol, outputsize="compact"):
+        alpha_symbol = TICKERS[asset_symbol]["alpha_symbol"]
         params = {
+            "function": "TIME_SERIES_DAILY",
+            "symbol": alpha_symbol,
             "apikey": ALPHA_VANTAGE_API_KEY,
             "outputsize": outputsize
         }
-        
-        if asset_category == "crypto":
-            params.update({
-                "function": "DIGITAL_CURRENCY_DAILY",
-                "symbol": alpha_symbol,
-                "market": "USD"
-            })
-        elif asset_category == "forex":
-            from_sym, to_sym = alpha_symbol.split("/")
-            params.update({
-                "function": "FX_DAILY",
-                "from_symbol": from_sym,
-                "to_symbol": to_sym
-            })
-        else:
-            params.update({
-                "function": "TIME_SERIES_DAILY",
-                "symbol": alpha_symbol
-            })
         
         try:
             response = requests.get(AlphaVantageAPI.BASE_URL, params=params, timeout=30)
@@ -180,39 +113,21 @@ class AlphaVantageAPI:
                 st.error(f"API Error: {data['Error Message']}")
                 return pd.DataFrame()
             
-            return AlphaVantageAPI._parse_market_data(data, asset_category)
+            return AlphaVantageAPI._parse_market_data(data)
         except requests.exceptions.RequestException as e:
             st.error(f"Error fetching market data: {e}")
             return pd.DataFrame()
     
     @staticmethod
-    def _parse_market_data(data, asset_category):
-        if asset_category == "crypto":
-            time_series_key = "Time Series (Digital Currency Daily)"
-            rename_cols = {
-                "1a. open (USD)": "Open",
-                "2a. high (USD)": "High",
-                "3a. low (USD)": "Low",
-                "4a. close (USD)": "Close",
-                "5. volume": "Volume"
-            }
-        elif asset_category == "forex":
-            time_series_key = "Time Series FX (Daily)"
-            rename_cols = {
-                "1. open": "Open",
-                "2. high": "High",
-                "3. low": "Low",
-                "4. close": "Close"
-            }
-        else:
-            time_series_key = "Time Series (Daily)"
-            rename_cols = {
-                "1. open": "Open",
-                "2. high": "High",
-                "3. low": "Low",
-                "4. close": "Close",
-                "5. volume": "Volume"
-            }
+    def _parse_market_data(data):
+        time_series_key = "Time Series (Daily)"
+        rename_cols = {
+            "1. open": "Open",
+            "2. high": "High",
+            "3. low": "Low",
+            "4. close": "Close",
+            "5. volume": "Volume"
+        }
         
         time_series = data.get(time_series_key, {})
         if not time_series:
@@ -226,10 +141,7 @@ class AlphaVantageAPI:
         df = df.rename(columns=rename_cols)
         
         # Ensure all expected columns exist
-        expected_cols = ["Open", "High", "Low", "Close"]
-        if "Volume" not in df.columns:
-            df["Volume"] = 0  # Add dummy volume column if missing
-        
+        expected_cols = ["Open", "High", "Low", "Close", "Volume"]
         return df.apply(pd.to_numeric, errors="coerce").sort_index()
 
 # LLM Utilities
@@ -254,20 +166,18 @@ class LLMAPI:
 # Financial Analysis Utilities
 class FinancialAnalyzer:
     @staticmethod
-    def calculate_sentiment(news_articles, asset_key):
-        ticker_symbol = TICKERS[asset_key.split("_")[0]][asset_key.split("_")[1]]["alpha_symbol"].split(":")[-1]
+    def calculate_sentiment(news_articles, asset_symbol):
+        ticker_symbol = TICKERS[asset_symbol]["alpha_symbol"]
         total_score = 0
         count = 0
         
         for article in news_articles:
-            # Check for ticker-specific sentiment
             if "ticker_sentiment" in article:
                 for sentiment in article["ticker_sentiment"]:
                     if sentiment.get("ticker") == ticker_symbol and "ticker_sentiment_score" in sentiment:
                         total_score += float(sentiment["ticker_sentiment_score"])
                         count += 1
             
-            # Fallback to overall sentiment
             elif "overall_sentiment_score" in article:
                 total_score += float(article["overall_sentiment_score"])
                 count += 1
@@ -275,11 +185,11 @@ class FinancialAnalyzer:
         return total_score / count if count > 0 else 0
     
     @staticmethod
-    def create_rag_system(asset_category, asset_symbol, news_articles):
+    def create_rag_system(asset_symbol, news_articles):
         if not news_articles:
             return None
         
-        temp_dir = os.path.join("financial_data", f"{asset_category}_{asset_symbol}")
+        temp_dir = os.path.join("financial_data", f"stock_{asset_symbol}")
         os.makedirs(temp_dir, exist_ok=True)
         
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -369,15 +279,15 @@ SUMMARY: {article.get("summary", "No content")}
 class UIComponents:
     @staticmethod
     def display_home_page():
-        st.title("🌟 Financial Insights Hub")
+        st.title("🌟 Financial Insights Hub - Stocks")
         st.markdown("""
-        ### Welcome to your comprehensive financial analysis platform!
+        ### Welcome to your comprehensive stock analysis platform!
         
-        This application provides real-time financial insights, news analysis, and technical indicators for various asset classes.
+        This application provides real-time financial insights, news analysis, and technical indicators for major stocks.
         Powered by Alpha Vantage data and advanced AI analysis, it helps you make informed financial decisions.
         
         #### 🔑 Key Features:
-        - **Multi-Asset Coverage**: Analyze cryptocurrencies, stocks, indices, forex, and commodities
+        - **Stock Analysis**: Analyze major stocks
         - **News Sentiment Analysis**: Track market sentiment from financial news
         - **Technical Indicators**: View key technical analysis metrics
         - **AI-Powered Insights**: Ask questions about market trends
@@ -385,30 +295,30 @@ class UIComponents:
         - **Custom Date Ranges**: Select specific timeframes for your analysis
         
         #### 📊 Getting Started:
-        1. Choose an asset category and specific asset from the sidebar
-        2. Select your desired date range for news analysis
+        1. Choose a stock from the sidebar
+        2. Select your desired date range for analysis
         3. Explore different views: Overview, News Analysis, or Technical Analysis
-        4. Use the AI assistant to ask specific questions about your selected asset
+        4. Use the AI assistant to ask specific questions about your selected stock
         """)
         
         # Sample visualization
         st.subheader("Market Sentiment Overview")
-        categories = ["Crypto", "Stocks", "Forex", "Commodities", "Indices"]
-        sentiments = [0.45, 0.12, -0.25, 0.32, -0.15]
+        stocks = ["Apple", "Microsoft", "Amazon", "Tesla", "NVIDIA"]
+        sentiments = [0.45, 0.12, 0.35, -0.25, 0.32]
         fig = px.bar(
-            x=categories,
+            x=stocks,
             y=sentiments,
             color=sentiments,
             color_continuous_scale=["red", "gray", "green"],
             range_color=[-1, 1],
-            labels={"x": "Asset Category", "y": "Market Sentiment"},
-            title="Current Market Sentiment by Asset Class"
+            labels={"x": "Stock", "y": "Market Sentiment"},
+            title="Current Market Sentiment for Major Stocks"
         )
         st.plotly_chart(fig, use_container_width=True)
     
     @staticmethod
-    def display_overview(asset_category, asset_symbol, news_articles, data):
-        asset_info = TICKERS[asset_category][asset_symbol]
+    def display_overview(asset_symbol, news_articles, data):
+        asset_info = TICKERS[asset_symbol]
         st.header(f"{asset_info['name']} Overview")
         
         col1, col2 = st.columns([2, 1])
@@ -445,10 +355,9 @@ class UIComponents:
                     delta=f"{change:.2f} ({change_pct:.2f}%)"
                 )
                 
-                if "Volume" in data.columns:
-                    volume = latest["Volume"]
-                    volume_str = f"{volume/1e6:.2f}M" if volume >= 1e6 else f"{volume/1e3:.2f}K"
-                    st.metric(label="Volume", value=volume_str)
+                volume = latest["Volume"]
+                volume_str = f"{volume/1e6:.2f}M" if volume >= 1e6 else f"{volume/1e3:.2f}K"
+                st.metric(label="Volume", value=volume_str)
                 
                 try:
                     year_data = data.last('365D')
@@ -460,7 +369,7 @@ class UIComponents:
                     pass
             
             if news_articles:
-                avg_sentiment = FinancialAnalyzer.calculate_sentiment(news_articles, f"{asset_category}_{asset_symbol}")
+                avg_sentiment = FinancialAnalyzer.calculate_sentiment(news_articles, asset_symbol)
                 fig = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=avg_sentiment,
@@ -482,7 +391,7 @@ class UIComponents:
                     title = article.get("title", "No title")
                     sentiment = next(
                         (ts.get("ticker_sentiment_label", "N/A") for ts in article.get("ticker_sentiment", []) 
-                         if ts.get("ticker") == asset_info["alpha_symbol"].split(":")[-1]),
+                         if ts.get("ticker") == asset_info["alpha_symbol"]),
                         article.get("overall_sentiment_label", "N/A")
                     )
                     
@@ -494,16 +403,16 @@ class UIComponents:
             st.warning("Insufficient data for price prediction")
         else:
             st.subheader("AI Price Prediction")
-            key = f"{asset_category}_{asset_symbol}"
+            key = f"stock_{asset_symbol}"
             if key not in st.session_state.predictions:
-                sentiment_score = FinancialAnalyzer.calculate_sentiment(news_articles, key)
+                sentiment_score = FinancialAnalyzer.calculate_sentiment(news_articles, asset_symbol)
                 prediction = FinancialAnalyzer.predict_price(asset_info["name"], data, sentiment_score)
                 st.session_state.predictions[key] = prediction
             st.markdown(st.session_state.predictions[key])
 
     @staticmethod
-    def display_news_analysis(asset_category, asset_symbol, news_articles, start_date, end_date):
-        asset_info = TICKERS[asset_category][asset_symbol]
+    def display_news_analysis(asset_symbol, news_articles, start_date, end_date):
+        asset_info = TICKERS[asset_symbol]
         st.header(f"{asset_info['name']} News Analysis")
         
         if not news_articles:
@@ -546,7 +455,7 @@ class UIComponents:
             for article in news_articles:
                 sentiment = next(
                     (ts.get("ticker_sentiment_label", "N/A") for ts in article.get("ticker_sentiment", []) 
-                     if ts.get("ticker") == asset_info["alpha_symbol"].split(":")[-1]),
+                     if ts.get("ticker") == asset_info["alpha_symbol"]),
                     article.get("overall_sentiment_label", "N/A")
                 )
                 articles_data.append({
@@ -570,10 +479,10 @@ class UIComponents:
             )
         
         with tab3:
-            key = f"{asset_category}_{asset_symbol}"
+            key = f"stock_{asset_symbol}"
             if key not in st.session_state.rag_index:
                 with st.spinner("Building knowledge base..."):
-                    st.session_state.rag_index[key] = FinancialAnalyzer.create_rag_system(asset_category, asset_symbol, news_articles)
+                    st.session_state.rag_index[key] = FinancialAnalyzer.create_rag_system(asset_symbol, news_articles)
             
             user_question = st.text_input("Ask a question about the news:", key=f"question_{key}")
             if user_question:
@@ -594,8 +503,8 @@ class UIComponents:
                     st.markdown("---")
 
     @staticmethod
-    def display_technical_analysis(asset_category, asset_symbol, data):
-        asset_info = TICKERS[asset_category][asset_symbol]
+    def display_technical_analysis(asset_symbol, data):
+        asset_info = TICKERS[asset_symbol]
         st.header(f"{asset_info['name']} Technical Analysis")
         
         if data.empty:
@@ -689,24 +598,18 @@ class UIComponents:
 
 # Main Application
 def main():
-    st.sidebar.title("Financial Insights Hub")
-    selected_page = st.sidebar.radio("Navigation", ["Home", "Asset Analysis"])
+    st.sidebar.title("Financial Insights Hub - Stocks")
+    selected_page = st.sidebar.radio("Navigation", ["Home", "Stock Analysis"])
     
     if selected_page == "Home":
         UIComponents.display_home_page()
     else:
-        # Asset selection
-        st.sidebar.header("Asset Selection")
-        asset_category = st.sidebar.selectbox(
-            "Asset Category",
-            list(TICKERS.keys()),
-            format_func=lambda x: x.capitalize()
-        )
-        
+        # Stock selection
+        st.sidebar.header("Stock Selection")
         asset_symbol = st.sidebar.selectbox(
-            f"Select {asset_category.capitalize()}",
-            list(TICKERS[asset_category].keys()),
-            format_func=lambda x: f"{x} - {TICKERS[asset_category][x]['name']}"
+            "Select Stock",
+            list(TICKERS.keys()),
+            format_func=lambda x: f"{x} - {TICKERS[x]['name']}"
         )
         
         # Date range
@@ -720,13 +623,13 @@ def main():
             st.session_state.pop("last_updated", None)
         
         # Fetch data
-        data_key = f"{asset_category}_{asset_symbol}_data"
-        news_key = f"{asset_category}_{asset_symbol}_news"
+        data_key = f"stock_{asset_symbol}_data"
+        news_key = f"stock_{asset_symbol}_news"
         
         if data_key not in st.session_state or news_key not in st.session_state:
             with st.spinner("Loading data..."):
-                market_data = AlphaVantageAPI.fetch_market_data(asset_category, asset_symbol)
-                news_data = AlphaVantageAPI.fetch_news(asset_category, asset_symbol, start_date, end_date)
+                market_data = AlphaVantageAPI.fetch_market_data(asset_symbol)
+                news_data = AlphaVantageAPI.fetch_news(asset_symbol, start_date, end_date)
                 st.session_state[data_key] = market_data
                 st.session_state[news_key] = news_data
                 st.session_state["last_updated"] = datetime.now()
@@ -736,7 +639,6 @@ def main():
         
         with tab1:
             UIComponents.display_overview(
-                asset_category, 
                 asset_symbol, 
                 st.session_state[news_key], 
                 st.session_state[data_key]
@@ -744,7 +646,6 @@ def main():
         
         with tab2:
             UIComponents.display_news_analysis(
-                asset_category, 
                 asset_symbol, 
                 st.session_state[news_key], 
                 start_date, 
@@ -753,7 +654,6 @@ def main():
         
         with tab3:
             UIComponents.display_technical_analysis(
-                asset_category, 
                 asset_symbol, 
                 st.session_state[data_key]
             )
