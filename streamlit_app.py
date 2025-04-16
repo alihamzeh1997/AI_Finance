@@ -1,14 +1,12 @@
-# app.py - Optimized Financial Insights Hub
+# app.py - Financial Insights Hub
 import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
 import datetime
 import os
-import json
 import time
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 import plotly.express as px
 import pandas_ta as ta
@@ -38,7 +36,6 @@ st.set_page_config(
 
 # Initialize session state variables
 def init_session_state():
-    """Initialize session state variables"""
     session_vars = {
         "daily_summaries": {},
         "rag_index": {},
@@ -103,19 +100,12 @@ TICKERS = {
     }
 }
 
-# Configure data directory
-DATA_DIR = "financial_data"
-os.makedirs(DATA_DIR, exist_ok=True)
-
 # Alpha Vantage API Utilities
 class AlphaVantageAPI:
-    """Utility class for Alpha Vantage API interactions"""
-    
     BASE_URL = "https://www.alphavantage.co/query"
     
     @staticmethod
     def fetch_news(asset_category, asset_symbol, start_date=None, end_date=None, limit=50):
-        """Fetch news related to the asset"""
         alpha_symbol = TICKERS[asset_category][asset_symbol]["alpha_symbol"].split(":")[-1]
         
         # Determine topics based on asset category
@@ -156,7 +146,6 @@ class AlphaVantageAPI:
 
     @staticmethod
     def fetch_market_data(asset_category, asset_symbol, outputsize="compact"):
-        """Fetch market data based on asset type"""
         alpha_symbol = TICKERS[asset_category][asset_symbol]["alpha_symbol"].split(":")[-1]
         params = {
             "apikey": ALPHA_VANTAGE_API_KEY,
@@ -198,49 +187,55 @@ class AlphaVantageAPI:
     
     @staticmethod
     def _parse_market_data(data, asset_category):
-        """Parse market data response"""
         if asset_category == "crypto":
-            time_series = data.get("Time Series (Digital Currency Daily)", {})
-            df = pd.DataFrame(time_series).T
-            df.index = pd.to_datetime(df.index)
-            df = df.rename(columns={
+            time_series_key = "Time Series (Digital Currency Daily)"
+            rename_cols = {
                 "1a. open (USD)": "Open",
                 "2a. high (USD)": "High",
                 "3a. low (USD)": "Low",
                 "4a. close (USD)": "Close",
                 "5. volume": "Volume"
-            })
+            }
         elif asset_category == "forex":
-            time_series = data.get("Time Series FX (Daily)", {})
-            df = pd.DataFrame(time_series).T
-            df.index = pd.to_datetime(df.index)
-            df = df.rename(columns={
+            time_series_key = "Time Series FX (Daily)"
+            rename_cols = {
                 "1. open": "Open",
                 "2. high": "High",
                 "3. low": "Low",
                 "4. close": "Close"
-            })
+            }
         else:
-            time_series = data.get("Time Series (Daily)", {})
-            df = pd.DataFrame(time_series).T
-            df.index = pd.to_datetime(df.index)
-            df = df.rename(columns={
+            time_series_key = "Time Series (Daily)"
+            rename_cols = {
                 "1. open": "Open",
                 "2. high": "High",
                 "3. low": "Low",
                 "4. close": "Close",
                 "5. volume": "Volume"
-            })
+            }
+        
+        time_series = data.get(time_series_key, {})
+        if not time_series:
+            st.error("No time series data found in response")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(time_series).T
+        df.index = pd.to_datetime(df.index)
+        
+        # Rename columns to standard names
+        df = df.rename(columns=rename_cols)
+        
+        # Ensure all expected columns exist
+        expected_cols = ["Open", "High", "Low", "Close"]
+        if "Volume" not in df.columns:
+            df["Volume"] = 0  # Add dummy volume column if missing
         
         return df.apply(pd.to_numeric, errors="coerce").sort_index()
 
 # LLM Utilities
 class LLMAPI:
-    """Utility class for LLM interactions"""
-    
     @staticmethod
     def call(prompt, max_tokens=1000):
-        """Call LLM API"""
         try:
             completion = openrouter_client.chat.completions.create(
                 extra_headers={
@@ -258,12 +253,9 @@ class LLMAPI:
 
 # Financial Analysis Utilities
 class FinancialAnalyzer:
-    """Utility class for financial analysis"""
-    
     @staticmethod
-    def calculate_sentiment(news_articles, asset_symbol):
-        """Calculate sentiment score from news articles"""
-        ticker_symbol = TICKERS[asset_symbol.split("_")[0]][asset_symbol.split("_")[1]]["alpha_symbol"].split(":")[-1]
+    def calculate_sentiment(news_articles, asset_key):
+        ticker_symbol = TICKERS[asset_key.split("_")[0]][asset_key.split("_")[1]]["alpha_symbol"].split(":")[-1]
         total_score = 0
         count = 0
         
@@ -284,11 +276,10 @@ class FinancialAnalyzer:
     
     @staticmethod
     def create_rag_system(asset_category, asset_symbol, news_articles):
-        """Create RAG system from news articles"""
         if not news_articles:
             return None
         
-        temp_dir = os.path.join(DATA_DIR, f"{asset_category}_{asset_symbol}")
+        temp_dir = os.path.join("financial_data", f"{asset_category}_{asset_symbol}")
         os.makedirs(temp_dir, exist_ok=True)
         
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -320,7 +311,6 @@ SUMMARY: {article.get("summary", "No content")}
     
     @staticmethod
     def ask_rag(question, vectorstore, asset_name):
-        """Ask question to RAG system"""
         if not vectorstore:
             return "No data available for this asset."
         
@@ -345,7 +335,6 @@ SUMMARY: {article.get("summary", "No content")}
     
     @staticmethod
     def predict_price(asset_name, data, sentiment_score):
-        """Predict price using technical indicators and sentiment"""
         if data.empty or len(data) < 50:
             return "Insufficient data for prediction"
         
@@ -378,11 +367,8 @@ SUMMARY: {article.get("summary", "No content")}
 
 # Streamlit UI Components
 class UIComponents:
-    """Utility class for Streamlit UI components"""
-    
     @staticmethod
     def display_home_page():
-        """Display home page"""
         st.title("🌟 Financial Insights Hub")
         st.markdown("""
         ### Welcome to your comprehensive financial analysis platform!
@@ -422,7 +408,6 @@ class UIComponents:
     
     @staticmethod
     def display_overview(asset_category, asset_symbol, news_articles, data):
-        """Display asset overview"""
         asset_info = TICKERS[asset_category][asset_symbol]
         st.header(f"{asset_info['name']} Overview")
         
@@ -518,7 +503,6 @@ class UIComponents:
 
     @staticmethod
     def display_news_analysis(asset_category, asset_symbol, news_articles, start_date, end_date):
-        """Display news analysis"""
         asset_info = TICKERS[asset_category][asset_symbol]
         st.header(f"{asset_info['name']} News Analysis")
         
@@ -611,7 +595,6 @@ class UIComponents:
 
     @staticmethod
     def display_technical_analysis(asset_category, asset_symbol, data):
-        """Display technical analysis"""
         asset_info = TICKERS[asset_category][asset_symbol]
         st.header(f"{asset_info['name']} Technical Analysis")
         
@@ -706,7 +689,6 @@ class UIComponents:
 
 # Main Application
 def main():
-    """Main application function"""
     st.sidebar.title("Financial Insights Hub")
     selected_page = st.sidebar.radio("Navigation", ["Home", "Asset Analysis"])
     
